@@ -9,6 +9,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
     using System.Threading.Tasks;
     using Config;
     using Microsoft.Azure.Documents.ChangeFeedProcessor;
+    using Microsoft.Azure.Documents.Client;
     using Microsoft.Azure.WebJobs.Host;
     using Microsoft.Azure.WebJobs.Host.Triggers;
 
@@ -44,6 +45,9 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
             {
                 return null;
             }
+
+            ConnectionMode? desiredConnectionMode = _config.ConnectionMode;
+            Protocol? desiredConnectionProtocol = _config.Protocol;
 
             _monitorConnectionString = _nameResolver.Resolve(DocumentDBConfiguration.AzureWebJobsDocumentDBConnectionStringName);
             _leasesConnectionString = _nameResolver.Resolve(DocumentDBConfiguration.AzureWebJobsDocumentDBConnectionStringName);
@@ -81,6 +85,16 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
                     CollectionName = ResolveAttributeValue(attribute.CollectionName)
                 };
 
+                if (desiredConnectionMode.HasValue)
+                {
+                    documentCollectionLocation.ConnectionPolicy.ConnectionMode = desiredConnectionMode.Value;
+                }
+
+                if (desiredConnectionProtocol.HasValue)
+                {
+                    documentCollectionLocation.ConnectionPolicy.ConnectionProtocol = desiredConnectionProtocol.Value;
+                }
+
                 documentCollectionLocation.ConnectionPolicy.UserAgentSuffix = CosmosDBTriggerUserAgentSuffix;
 
                 leaseCollectionLocation = new DocumentCollectionInfo
@@ -90,6 +104,16 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
                     DatabaseName = ResolveAttributeValue(attribute.LeaseDatabaseName),
                     CollectionName = ResolveAttributeValue(attribute.LeaseCollectionName)
                 };
+
+                if (desiredConnectionMode.HasValue)
+                {
+                    leaseCollectionLocation.ConnectionPolicy.ConnectionMode = desiredConnectionMode.Value;
+                }
+
+                if (desiredConnectionProtocol.HasValue)
+                {
+                    leaseCollectionLocation.ConnectionPolicy.ConnectionProtocol = desiredConnectionProtocol.Value;
+                }
 
                 leaseCollectionLocation.ConnectionPolicy.UserAgentSuffix = CosmosDBTriggerUserAgentSuffix;
 

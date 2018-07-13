@@ -48,7 +48,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
 
             var factoryMock = new Mock<IDocumentDBServiceFactory>(MockBehavior.Strict);
             factoryMock
-                .Setup(f => f.CreateService(ConfigConnStr))
+                .Setup(f => f.CreateService(ConfigConnStr, null, null))
                 .Returns(serviceMock.Object);
 
             var testTrace = new TestTraceWriter(TraceLevel.Warning);
@@ -57,7 +57,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             await RunTestAsync("Outputs", factoryMock.Object, testTrace);
 
             // Assert
-            factoryMock.Verify(f => f.CreateService(ConfigConnStr), Times.Once());
+            factoryMock.Verify(f => f.CreateService(ConfigConnStr, null, null), Times.Once());
             serviceMock.Verify(m => m.UpsertDocumentAsync(It.IsAny<Uri>(), It.IsAny<object>()), Times.Exactly(8));
             Assert.Equal("Outputs", testTrace.Events.Single().Message);
         }
@@ -68,8 +68,8 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             // Arrange
             var factoryMock = new Mock<IDocumentDBServiceFactory>(MockBehavior.Strict);
             factoryMock
-                .Setup(f => f.CreateService(DefaultConnStr))
-                .Returns<string>(connectionString => new DocumentDBService(connectionString));
+                .Setup(f => f.CreateService(DefaultConnStr, null, null))
+                .Returns<string, ConnectionMode?, Protocol?>((connectionString, connectionMode, protocol) => new DocumentDBService(connectionString, connectionMode, protocol));
 
             var testTrace = new TestTraceWriter(TraceLevel.Warning);
 
@@ -78,7 +78,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             await RunTestAsync("Client", factoryMock.Object, testTrace, configConnectionString: null);
 
             //Assert
-            factoryMock.Verify(f => f.CreateService(DefaultConnStr), Times.Once());
+            factoryMock.Verify(f => f.CreateService(DefaultConnStr, null, null), Times.Once());
             Assert.Equal("Client", testTrace.Events.Single().Message);
         }
 
@@ -159,7 +159,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
 
             var factoryMock = new Mock<IDocumentDBServiceFactory>(MockBehavior.Strict);
             factoryMock
-                .Setup(f => f.CreateService(It.IsAny<string>()))
+                .Setup(f => f.CreateService(It.IsAny<string>(), null, null))
                 .Returns(serviceMock.Object);
 
             var testTrace = new TestTraceWriter(TraceLevel.Warning);
@@ -168,7 +168,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             await RunTestAsync(nameof(DocumentDBEndToEndFunctions.Inputs), factoryMock.Object, testTrace, item1Id);
 
             // Assert
-            factoryMock.Verify(f => f.CreateService(It.IsAny<string>()), Times.Once());
+            factoryMock.Verify(f => f.CreateService(It.IsAny<string>(), null, null), Times.Once());
             Assert.Equal(1, testTrace.Events.Count);
             Assert.Equal("Inputs", testTrace.Events[0].Message);
             serviceMock.VerifyAll();
@@ -191,7 +191,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
 
             var factoryMock = new Mock<IDocumentDBServiceFactory>(MockBehavior.Strict);
             factoryMock
-                .Setup(f => f.CreateService(AttributeConnStr))
+                .Setup(f => f.CreateService(AttributeConnStr, null, null))
                 .Returns(serviceMock.Object);
 
             var jobject = JObject.FromObject(new QueueData { DocumentId = "docid1", PartitionKey = "partkey1" });
@@ -202,7 +202,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             await RunTestAsync(nameof(DocumentDBEndToEndFunctions.TriggerObject), factoryMock.Object, testTrace, jobject.ToString());
 
             // Assert
-            factoryMock.Verify(f => f.CreateService(AttributeConnStr), Times.Once());
+            factoryMock.Verify(f => f.CreateService(AttributeConnStr, null, null), Times.Once());
             Assert.Equal(1, testTrace.Events.Count);
             Assert.Equal("TriggerObject", testTrace.Events[0].Message);
         }
@@ -246,12 +246,12 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             Assert.Equal("'Id' is required when binding to a JObject property.", ex.InnerException.Message);
         }
 
-        private Task RunTestAsync(string testName, IDocumentDBServiceFactory factory, TraceWriter testTrace, object argument = null, string configConnectionString = ConfigConnStr)
+        private Task RunTestAsync(string testName, IDocumentDBServiceFactory factory, TestTraceWriter testTrace, object argument = null, string configConnectionString = ConfigConnStr)
         {
             return RunTestAsync(typeof(DocumentDBEndToEndFunctions), testName, factory, testTrace, argument, configConnectionString);
         }
 
-        private async Task RunTestAsync(Type testType, string testName, IDocumentDBServiceFactory factory, TraceWriter testTrace, object argument = null, string configConnectionString = ConfigConnStr, bool includeDefaultConnectionString = true)
+        private async Task RunTestAsync(Type testType, string testName, IDocumentDBServiceFactory factory, TestTraceWriter testTrace, object argument = null, string configConnectionString = ConfigConnStr, bool includeDefaultConnectionString = true)
         {
             ExplicitTypeLocator locator = new ExplicitTypeLocator(testType);
             JobHostConfiguration config = new JobHostConfiguration
@@ -287,6 +287,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.Tests.Extensions.DocumentDB
             JobHost host = new JobHost(config);
 
             await host.StartAsync();
+            testTrace.Events.Clear();
             await host.CallAsync(testType.GetMethod(testName), arguments);
             await host.StopAsync();
         }
