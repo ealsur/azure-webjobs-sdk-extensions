@@ -17,20 +17,24 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
     internal class CosmosDBTriggerListener : IListener, IChangeFeedObserverFactory
     {
         private readonly ITriggeredFunctionExecutor executor;
-        private readonly ChangeFeedEventHost host;
         private readonly TraceWriter trace;
         private readonly DocumentCollectionInfo monitorCollection;
         private readonly DocumentCollectionInfo leaseCollection;
+        private readonly string hostName;
+        private readonly ChangeFeedOptions changeFeedOptions;
+        private readonly ChangeFeedHostOptions leaseHostOptions;
+        private ChangeFeedEventHost host;
         private bool listenerStarted = false;
 
         public CosmosDBTriggerListener(ITriggeredFunctionExecutor executor, DocumentCollectionInfo documentCollectionLocation, DocumentCollectionInfo leaseCollectionLocation, ChangeFeedHostOptions leaseHostOptions, int? maxItemCount, TraceWriter trace)
         {
             this.trace = trace;
             this.executor = executor;
-            string hostName = Guid.NewGuid().ToString();
+            this.hostName = Guid.NewGuid().ToString();
 
             this.monitorCollection = documentCollectionLocation;
             this.leaseCollection = leaseCollectionLocation;
+            this.leaseHostOptions = leaseHostOptions;
 
             ChangeFeedOptions changeFeedOptions = new ChangeFeedOptions();
             if (maxItemCount.HasValue)
@@ -38,7 +42,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
                 changeFeedOptions.MaxItemCount = maxItemCount;
             }
 
-            this.host = new ChangeFeedEventHost(hostName, documentCollectionLocation, leaseCollectionLocation, changeFeedOptions, leaseHostOptions);
+            this.changeFeedOptions = changeFeedOptions;
         }
 
         public void Cancel()
@@ -63,6 +67,8 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
                 throw new InvalidOperationException("The listener has already been started.");
             }
 
+            this.InitializeHost();
+
             try
             {
                 await this.host.RegisterObserverFactoryAsync(this);
@@ -72,6 +78,7 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
             {
                 // Throw a custom error so that it's easier to decipher.
                 string message = $"Either the source collection '{monitorCollection.CollectionName}' (in database '{monitorCollection.DatabaseName}')  or the lease collection '{leaseCollection.CollectionName}' (in database '{leaseCollection.DatabaseName}') does not exist. Both collections must exist before the listener starts. To automatically create the lease collection, set '{nameof(CosmosDBTriggerAttribute.CreateLeaseCollectionIfNotExists)}' to 'true'.";
+                this.host = null;
                 throw new InvalidOperationException(message, ex);
             }
         }
@@ -89,6 +96,14 @@ namespace Microsoft.Azure.WebJobs.Extensions.DocumentDB
             catch (Exception ex)
             {
                 this.trace.Warning($"Stopping the observer failed, potentially it was never started. Exception: {ex.Message}.");
+            }
+        }
+
+        private void InitializeHost()
+        {
+            if (this.host == null)
+            {
+                this.host = new ChangeFeedEventHost(this.hostName, this.monitorCollection, this.leaseCollection, this.changeFeedOptions, leaseHostOptions);
             }
         }
     }
